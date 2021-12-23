@@ -1,0 +1,315 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Launcher - Service"
+
+
+Parameters:
+
+  ServiceName:
+    Type: String
+    Default: test-cicd
+    Description: Service Name
+  ServicePath:
+    Type: String
+    Default: /test-cicd
+    Description: Service Name
+  BranchName:
+    Type: String
+    Default: main
+    Description: Branch Name
+  AlbRulePriority:
+    Type: Number
+    Default: 2
+    Description: The priority for the routing rule added to the load balancer.
+                 This only applies if your have multiple services which have been
+                 assigned to different paths on the load balancer.
+  ContainerPort:
+    Type: Number
+    Default: 5000
+    Description: What port number the application inside the docker container is binding to
+  AsContainersMin:
+    Type: Number
+    Default: 1
+    Description: Min mumber of tasks
+  AsContainersMax:
+    Type: Number
+    Default: 6
+    Description: Max mumber of tasks
+  AsContainersDesired:
+    Type: Number
+    Default: 2
+    Description: Desired number of tasks
+  AsTargetCpuUtilization:
+    Type: Number
+    Default: 50
+    Description: Target CPU utilization (%)
+  ContainerCpu:
+    Type: Number
+    Default: 256
+    Description: How much CPU to give the container. 1024 is 1 CPU
+  ContainerMemory:
+    Type: Number
+    Default: 512
+    Description: How much memory in megabytes to give the container
+  ClusterName:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/HijazWorld/ClusterName"
+  FargateContainerSecurityGroup:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/HijazWorld/ECSContainerSecurityGroup"
+  ECSTaskExecutionRole:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/HijazWorld/ECSTaskExecutionRole"
+  PrivateSubnet1:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/HijazWorld/PrivateSubnetOne"
+  PrivateSubnet2:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/HijazWorld/PrivateSubnetTwo"
+  VpcId:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/HijazWorld/VPCId"
+  PublicListener:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/HijazWorld/PublicListener"
+  PublicListenerEndpoint:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/HijazWorld/PublicListenerEndpoint"
+
+
+Resources:
+
+
+  #-----------------------------------------------------------------------------#
+  # Deploy Api Gateway
+  #-----------------------------------------------------------------------------#
+
+  APIGW:
+    Type : 'AWS::ApiGateway::RestApi'
+    Properties :
+      Name: 'APIGW-microservices'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      ApiKeySourceType: 'HEADER'
+      Body: !Sub |
+        swagger: "2.0"
+        info:
+          description: "API GW endpoint for microservices"
+          version: "2020-07-31T21:01:49Z"
+          title: "Microservices-API"
+        basePath: "/"
+        schemes:
+        - "https"
+        paths:
+          "${ServicePath}":
+            get:
+              produces:
+              - "application/json"
+              responses:
+                '200':
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+              x-amazon-apigateway-integration:
+                uri: "${PublicListenerEndpoint}${ServicePath}"
+                responses:
+                  default:
+                    statusCode: "200"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "GET"
+                type: "http_proxy"
+            options:
+              consumes:
+              - "application/json"
+              produces:
+              - "application/json"
+              responses:
+                '200':
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                passthroughBehavior: "when_no_match"
+                type: "mock"
+        definitions:
+          Empty:
+            type: "object"
+            title: "Empty Schema"
+
+  DeployAPI:
+    Type: AWS::ApiGateway::Deployment
+    #DeploymentCanarySettings:
+    #PercentTraffic: 30
+    Properties:
+      Description: 'Deployed Api'
+      RestApiId: !Ref APIGW
+
+
+  Prod:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: Prod
+      Description: Prod Stage
+      RestApiId: !Ref APIGW
+      DeploymentId: !Ref DeployAPI
+      Variables:
+        Stack: Prod
+      MethodSettings:
+        - ResourcePath: /
+          HttpMethod: GET
+          MetricsEnabled: true
+          DataTraceEnabled: false
+        - ResourcePath: !Sub ${ServicePath}
+          HttpMethod: GET
+          MetricsEnabled: true
+          DataTraceEnabled: false
+          ThrottlingBurstLimit: 555
+
+
+  # The task definition. This is a simple metadata description of what
+  # container to run, and what resource requirements it has.
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ServiceName}-${BranchName}"
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Sub "task-${ServiceName}-${BranchName}"
+          Cpu: !Ref 'ContainerCpu'
+          Memory: !Ref ContainerMemory
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ServiceName}"
+          PortMappings:
+            - ContainerPort: !Ref 'ContainerPort'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: "true"
+              awslogs-region: !Sub "${AWS::Region}"
+              awslogs-group: !Sub "${ServiceName}-${BranchName}"
+              awslogs-stream-prefix: !Sub "${ServiceName}-${BranchName}"
+
+  # The service. The service is a resource which allows you to run multiple
+  # copies of a type of task, and gather up their logs and metrics, as well
+  # as monitor the number of running tasks and replace any that have crashed
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: LoadBalancerRule
+    Properties:
+      ServiceName: !Sub "${ServiceName}-${BranchName}"
+      Cluster: !Ref ClusterName
+      #EnableECSManagedTags: true
+      #PropagateTags: SERVICE
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      DesiredCount: !Ref AsContainersDesired
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref FargateContainerSecurityGroup
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+      TaskDefinition: !Ref 'TaskDefinition'
+      LoadBalancers:
+        - ContainerName: !Sub "task-${ServiceName}-${BranchName}"
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref 'TargetGroup'
+
+  # A target group. This is used for keeping track of all the tasks, and
+  # what IP addresses / port numbers they have. You can query it yourself,
+  # to use the addresses yourself, but most often this target group is just
+  # connected to an application load balancer, or network load balancer, so
+  # it can automatically distribute traffic across all the targets.
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 6
+      HealthCheckPath: !Ref ServicePath
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      TargetType: ip
+      Name: !Sub "${ServiceName}-${BranchName}"
+      Port: !Ref 'ContainerPort'
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VpcId
+
+  # Create a rule on the load balancer for routing traffic to the target group
+  LoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref 'TargetGroup'
+          Type: 'forward'
+      Conditions:
+        - Field: path-pattern
+          Values: [!Ref ServicePath]
+      ListenerArn: !Ref PublicListener
+      Priority: !Ref AlbRulePriority
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${ServiceName}-${BranchName}"
+
+  AutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: !Ref AsContainersMin
+      MaxCapacity: !Ref AsContainersMax
+      ResourceId: !Sub "service/${ClusterName}/${ServiceName}-${BranchName}"
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      # "The Amazon Resource Name (ARN) of an AWS Identity and Access Management (IAM) role that allows Application Auto Scaling to modify your scalable target."
+      RoleARN: !GetAtt AutoScalingRole.Arn
+
+  AutoScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub "${ServiceName}-${BranchName}-AutoScalingPolicy"
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleInCooldown: 10
+        ScaleOutCooldown: 10
+        # Keep things at or lower than 50% CPU utilization, for example
+        TargetValue: !Ref AsTargetCpuUtilization
+
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole'
