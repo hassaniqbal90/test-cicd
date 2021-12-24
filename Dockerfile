@@ -1,6 +1,6 @@
 FROM public.ecr.aws/lts/ubuntu:latest
 
-RUN apt-get update
+RUN apt-get update && DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y tzdata
 RUN apt-get install -y apache2
 
 ENV APACHE_RUN_USER www-data
