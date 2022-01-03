@@ -32,7 +32,7 @@ Parameters:
     Description: Min mumber of tasks
   AsContainersMax:
     Type: Number
-    Default: 6
+    Default: 3
     Description: Max mumber of tasks
   AsContainersDesired:
     Type: Number
@@ -83,103 +83,103 @@ Resources:
   # Deploy Api Gateway
   #-----------------------------------------------------------------------------#
 
-  APIGW:
-    Type : 'AWS::ApiGateway::RestApi'
-    Properties :
-      Name: 'APIGW-microservices'
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-      ApiKeySourceType: 'HEADER'
-      Body: !Sub |
-        swagger: "2.0"
-        info:
-          description: "API GW endpoint for microservices"
-          version: "2020-07-31T21:01:49Z"
-          title: "Microservices-API"
-        basePath: "/"
-        schemes:
-        - "https"
-        paths:
-          "${ServicePath}":
-            get:
-              produces:
-              - "application/json"
-              responses:
-                '200':
-                  description: "200 response"
-                  schema:
-                    $ref: "#/definitions/Empty"
-              x-amazon-apigateway-integration:
-                uri: "${PublicListenerEndpoint}${ServicePath}"
-                responses:
-                  default:
-                    statusCode: "200"
-                passthroughBehavior: "when_no_match"
-                httpMethod: "GET"
-                type: "http_proxy"
-            options:
-              consumes:
-              - "application/json"
-              produces:
-              - "application/json"
-              responses:
-                '200':
-                  description: "200 response"
-                  schema:
-                    $ref: "#/definitions/Empty"
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: "string"
-                    Access-Control-Allow-Methods:
-                      type: "string"
-                    Access-Control-Allow-Headers:
-                      type: "string"
-              x-amazon-apigateway-integration:
-                responses:
-                  default:
-                    statusCode: "200"
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
-                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-                      method.response.header.Access-Control-Allow-Origin: "'*'"
-                requestTemplates:
-                  application/json: "{\"statusCode\": 200}"
-                passthroughBehavior: "when_no_match"
-                type: "mock"
-        definitions:
-          Empty:
-            type: "object"
-            title: "Empty Schema"
+  # APIGW:
+  #   Type : 'AWS::ApiGateway::RestApi'
+  #   Properties :
+  #     Name: 'APIGW-microservices'
+  #     EndpointConfiguration:
+  #       Types:
+  #         - REGIONAL
+  #     ApiKeySourceType: 'HEADER'
+  #     Body: !Sub |
+  #       swagger: "2.0"
+  #       info:
+  #         description: "API GW endpoint for microservices"
+  #         version: "2020-07-31T21:01:49Z"
+  #         title: "Microservices-API"
+  #       basePath: "/"
+  #       schemes:
+  #       - "https"
+  #       paths:
+  #         "${ServicePath}":
+  #           get:
+  #             produces:
+  #             - "application/json"
+  #             responses:
+  #               '200':
+  #                 description: "200 response"
+  #                 schema:
+  #                   $ref: "#/definitions/Empty"
+  #             x-amazon-apigateway-integration:
+  #               uri: "${PublicListenerEndpoint}${ServicePath}"
+  #               responses:
+  #                 default:
+  #                   statusCode: "200"
+  #               passthroughBehavior: "when_no_match"
+  #               httpMethod: "GET"
+  #               type: "http_proxy"
+  #           options:
+  #             consumes:
+  #             - "application/json"
+  #             produces:
+  #             - "application/json"
+  #             responses:
+  #               '200':
+  #                 description: "200 response"
+  #                 schema:
+  #                   $ref: "#/definitions/Empty"
+  #                 headers:
+  #                   Access-Control-Allow-Origin:
+  #                     type: "string"
+  #                   Access-Control-Allow-Methods:
+  #                     type: "string"
+  #                   Access-Control-Allow-Headers:
+  #                     type: "string"
+  #             x-amazon-apigateway-integration:
+  #               responses:
+  #                 default:
+  #                   statusCode: "200"
+  #                   responseParameters:
+  #                     method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+  #                     method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+  #                     method.response.header.Access-Control-Allow-Origin: "'*'"
+  #               requestTemplates:
+  #                 application/json: "{\"statusCode\": 200}"
+  #               passthroughBehavior: "when_no_match"
+  #               type: "mock"
+  #       definitions:
+  #         Empty:
+  #           type: "object"
+  #           title: "Empty Schema"
 
-  DeployAPI:
-    Type: AWS::ApiGateway::Deployment
-    #DeploymentCanarySettings:
-    #PercentTraffic: 30
-    Properties:
-      Description: 'Deployed Api'
-      RestApiId: !Ref APIGW
+  # DeployAPI:
+  #   Type: AWS::ApiGateway::Deployment
+  #   #DeploymentCanarySettings:
+  #   #PercentTraffic: 30
+  #   Properties:
+  #     Description: 'Deployed Api'
+  #     RestApiId: !Ref APIGW
 
 
-  Prod:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      StageName: Prod
-      Description: Prod Stage
-      RestApiId: !Ref APIGW
-      DeploymentId: !Ref DeployAPI
-      Variables:
-        Stack: Prod
-      MethodSettings:
-        - ResourcePath: /
-          HttpMethod: GET
-          MetricsEnabled: true
-          DataTraceEnabled: false
-        - ResourcePath: !Sub ${ServicePath}
-          HttpMethod: GET
-          MetricsEnabled: true
-          DataTraceEnabled: false
-          ThrottlingBurstLimit: 555
+  # Prod:
+  #   Type: AWS::ApiGateway::Stage
+  #   Properties:
+  #     StageName: Prod
+  #     Description: Prod Stage
+  #     RestApiId: !Ref APIGW
+  #     DeploymentId: !Ref DeployAPI
+  #     Variables:
+  #       Stack: Prod
+  #     MethodSettings:
+  #       - ResourcePath: /
+  #         HttpMethod: GET
+  #         MetricsEnabled: true
+  #         DataTraceEnabled: false
+  #       - ResourcePath: !Sub ${ServicePath}
+  #         HttpMethod: GET
+  #         MetricsEnabled: true
+  #         DataTraceEnabled: false
+  #         ThrottlingBurstLimit: 555
 
 
   # The task definition. This is a simple metadata description of what
@@ -212,6 +212,7 @@ Resources:
   # The service. The service is a resource which allows you to run multiple
   # copies of a type of task, and gather up their logs and metrics, as well
   # as monitor the number of running tasks and replace any that have crashed
+  
   Service:
     Type: AWS::ECS::Service
     DependsOn: LoadBalancerRule
