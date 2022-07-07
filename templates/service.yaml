@@ -20,7 +20,7 @@ Parameters:
     Description: Service Name
   ServicePath:
     Type: String
-    Default: /test-cicd
+    Default: /
     Description: Service Name
   BranchName:
     Type: String
