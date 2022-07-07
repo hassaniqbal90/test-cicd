@@ -34,7 +34,7 @@ Parameters:
                  assigned to different paths on the load balancer.
   ContainerPort:
     Type: Number
-    Default: 5000
+    Default: 80
     Description: What port number the application inside the docker container is binding to
   AsContainersMin:
     Type: Number
@@ -54,11 +54,11 @@ Parameters:
     Description: Target CPU utilization (%)
   ContainerCpu:
     Type: Number
-    Default: 256
+    Default: 128
     Description: How much CPU to give the container. 1024 is 1 CPU
   ContainerMemory:
     Type: Number
-    Default: 512
+    Default: 128
     Description: How much memory in megabytes to give the container
   ClusterName:
     Type: "AWS::SSM::Parameter::Value<String>"
