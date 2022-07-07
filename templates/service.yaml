@@ -46,7 +46,7 @@ Parameters:
     Description: Max mumber of tasks
   AsContainersDesired:
     Type: Number
-    Default: 2
+    Default: 1
     Description: Desired number of tasks
   AsTargetCpuUtilization:
     Type: Number
@@ -54,11 +54,11 @@ Parameters:
     Description: Target CPU utilization (%)
   ContainerCpu:
     Type: Number
-    Default: 128
+    Default: 256
     Description: How much CPU to give the container. 1024 is 1 CPU
   ContainerMemory:
     Type: Number
-    Default: 128
+    Default: 512
     Description: How much memory in megabytes to give the container
   ClusterName:
     Type: "AWS::SSM::Parameter::Value<String>"
